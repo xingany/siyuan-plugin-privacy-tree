@@ -2,7 +2,7 @@
   "name": "siyuan-plugin-privacy-tree",
   "author": "xingany",
   "url": "https://github.com/xingany/siyuan-plugin-privacy-tree",
-  "version": "0.10.9",
+  "version": "0.11.2",
   "minAppVersion": "3.0.0",
   "backends": [
     "all"

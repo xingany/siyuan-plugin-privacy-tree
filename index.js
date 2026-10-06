@@ -69,10 +69,22 @@ class PrivacyTreePlugin extends Plugin {
         this.collapsedTree = false;
         this.hiddenEls = [];
         this.forceLock = null;
-        this.tableDumped = false;
+        this.focusPwd = null;
+        this.gen = 0;
+    }
+
+    // 代际守卫：只有“最新一代”实例可以工作，旧实例自动失效
+    isCurrent() {
+        return this.gen > 0 && this.gen === window.__siyuanPrivacyTreeGen;
     }
 
     async onload() {
+        try {
+            window.__siyuanPrivacyTreeGen = (window.__siyuanPrivacyTreeGen || 0) + 1;
+        } catch (e) {
+            window.__siyuanPrivacyTreeGen = 1;
+        }
+        this.gen = window.__siyuanPrivacyTreeGen;
         try {
             if (window.__siyuanPrivacyTreeCleanup) {
                 window.__siyuanPrivacyTreeCleanup();
@@ -93,7 +105,7 @@ class PrivacyTreePlugin extends Plugin {
         try {
             this.addIcons(ICON);
             await this.loadConfig();
-            this.cleanupLeftovers();
+            this.doClear(false);
             try {
                 this.addCommand({
                     langKey: "togglePrivacyMode",
@@ -129,7 +141,10 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     onLayoutReady() {
-        this.cleanupLeftovers();
+        if (!this.isCurrent()) {
+            return;
+        }
+        this.doClear(false);
         this.ensureTopBar();
         this.startIdleWatch();
     }
@@ -143,8 +158,7 @@ class PrivacyTreePlugin extends Plugin {
         this.stopIdleWatch();
         this.clearTreeTimer();
         this.hidePasswordDialog();
-        this.deactivate(false);
-        this.cleanupLeftovers();
+        this.doClear(false);
         this.active = false;
         if (window.__siyuanPrivacyTreeCleanup) {
             window.__siyuanPrivacyTreeCleanup = null;
@@ -152,25 +166,49 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     doClear(notify) {
-        this.hideBlockOverlay();
-        this.hidePasswordDialog();
-        this.clearTreeTimer();
+        const safe = (fn) => {
+            try {
+                fn();
+            } catch (e) {
+                console.error("[privacy-tree] clear step failed", e);
+            }
+        };
+        this.active = false;
+        safe(() => this.hideBlockOverlay());
+        safe(() => this.hidePasswordDialog());
+        safe(() => this.clearTreeTimer());
         this.collapsedTree = false;
-        document.documentElement.classList.remove("privacy-tree-on");
-        document.querySelectorAll("[data-privacy-on]").forEach((el) => this.unmaskText(el));
-        document.querySelectorAll("[data-privacy-placeholder]").forEach((el) => el.removeAttribute("data-privacy-placeholder"));
-        this.clearCovers();
-        document.querySelectorAll(".privacy-tree-block").forEach((el) => {
+        safe(() => this.stopObserver());
+        safe(() => this.stopTitleGuard());
+        safe(() => document.documentElement.classList.remove("privacy-tree-on"));
+        safe(() => document.querySelectorAll("[data-privacy-on]").forEach((el) => this.unmaskText(el)));
+        safe(() => document.querySelectorAll("[data-privacy-placeholder]").forEach((el) => el.removeAttribute("data-privacy-placeholder")));
+        safe(() => this.clearCovers());
+        safe(() => document.querySelectorAll(".privacy-tree-block").forEach((el) => {
             if (el.parentElement) {
                 el.parentElement.removeChild(el);
             }
-        });
+        }));
         this.blockEl = null;
-        this.active = false;
-        this.stopObserver();
-        this.stopTitleGuard();
-        this.updateButton();
-        this.resetIdle();
+        safe(() => this.updateButton());
+        safe(() => this.resetIdle());
+        safe(() => setTimeout(() => {
+            if (this.active) {
+                return;
+            }
+            try {
+                document.documentElement.classList.remove("privacy-tree-on");
+                this.clearCovers();
+                document.querySelectorAll("[data-privacy-on]").forEach((el) => this.unmaskText(el));
+                document.querySelectorAll(".privacy-tree-block").forEach((el) => {
+                    if (el.parentElement) {
+                        el.parentElement.removeChild(el);
+                    }
+                });
+            } catch (e) {
+                /* ignore */
+            }
+        }, 150));
         if (notify && this.config.showMessage) {
             showMessage(this.t("cleared", "已清除所有隐私遮罩"), 2500);
         }
@@ -472,7 +510,7 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     applyAliases() {
-        if (!this.active) {
+        if (!this.active || !this.isCurrent()) {
             return;
         }
         this.applyContentCovers();
@@ -535,8 +573,6 @@ class PrivacyTreePlugin extends Plugin {
         }
     }
 
-    // ---- 内容遮盖 ----
-
     clearCovers() {
         document.querySelectorAll(".privacy-tree-hidden").forEach((el) => {
             el.classList.remove("privacy-tree-hidden");
@@ -577,13 +613,18 @@ class PrivacyTreePlugin extends Plugin {
         return null;
     }
 
+    isTableBlock(el) {
+        const type = el.getAttribute("data-type") || "";
+        return type.indexOf("Table") > -1 || el.classList.contains("table");
+    }
+
     isCoverableBlock(el) {
         const type = el.getAttribute("data-type") || "";
         if (!type || type === "NodeHeading") {
             return false;
         }
-        if (type.indexOf("Table") > -1 || el.classList.contains("table")) {
-            return false; // 表格单独处理
+        if (this.isTableBlock(el)) {
+            return false;
         }
         return !!el.querySelector(":scope > [contenteditable]");
     }
@@ -598,20 +639,7 @@ class PrivacyTreePlugin extends Plugin {
         this.hiddenEls.push(el);
     }
 
-    dumpTable(table) {
-        if (this.tableDumped) {
-            return;
-        }
-        this.tableDumped = true;
-        try {
-            this.saveData("_table.json", table.outerHTML.slice(0, 6000));
-        } catch (e) {
-            /* ignore */
-        }
-    }
-
     coverTable(table, style) {
-        // 优先盖单元格内的可编辑体；否则盖单元格；再否则盖整表
         let targets = Array.from(table.querySelectorAll("[contenteditable]"));
         if (targets.length === 0) {
             targets = Array.from(table.querySelectorAll("td, th, .table__cell, [data-type*=\"TableCell\"]"));
@@ -620,12 +648,6 @@ class PrivacyTreePlugin extends Plugin {
             targets = [table];
         }
         targets.forEach((t) => this.hideElement(t, this.coverText(t), style));
-        this.dumpTable(table);
-    }
-
-    isTableBlock(el) {
-        const type = el.getAttribute("data-type") || "";
-        return type.indexOf("Table") > -1 || el.classList.contains("table");
     }
 
     coverWholeDoc(docEl, style) {
@@ -642,7 +664,7 @@ class PrivacyTreePlugin extends Plugin {
 
     applyContentCovers() {
         this.clearCovers();
-        if (!this.active || !this.config.contentEnabled) {
+        if (!this.active || !this.isCurrent() || !this.config.contentEnabled) {
             return;
         }
         const hidden = this.config.hiddenItems || {};
@@ -669,7 +691,7 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     applyWindowTitle() {
-        if (!this.active) {
+        if (!this.active || !this.isCurrent()) {
             return;
         }
         const masked = this.currentDocName();
@@ -711,6 +733,10 @@ class PrivacyTreePlugin extends Plugin {
             return;
         }
         this.observer = new MutationObserver((records) => {
+            if (!this.isCurrent()) {
+                this.stopObserver();
+                return;
+            }
             for (let i = 0; i < records.length; i++) {
                 const t = records[i].target;
                 if (t && t.nodeType === 1 && (t.closest(".sy__file") || t.closest(".protyle"))) {
@@ -734,12 +760,12 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     scheduleApply() {
-        if (!this.active || this.applyTimer) {
+        if (!this.active || !this.isCurrent() || this.applyTimer) {
             return;
         }
         this.applyTimer = setTimeout(() => {
             this.applyTimer = null;
-            if (!this.active) {
+            if (!this.active || !this.isCurrent()) {
                 return;
             }
             this.applyAliases();
@@ -754,8 +780,10 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     activate(auto) {
+        if (!this.isCurrent()) {
+            return;
+        }
         this.doClear(false);
-        this.tableDumped = false;
         document.documentElement.classList.add("privacy-tree-on");
         this.active = true;
         this.updateButton();
@@ -786,6 +814,9 @@ class PrivacyTreePlugin extends Plugin {
     }
 
     toggle() {
+        if (!this.isCurrent()) {
+            return;
+        }
         if (this.active) {
             this.requestUnlock();
         } else {
@@ -846,7 +877,9 @@ class PrivacyTreePlugin extends Plugin {
         if (m > 0) {
             this.treeTimer = setTimeout(() => {
                 this.treeTimer = null;
-                this.collapseFileTree();
+                if (this.isCurrent()) {
+                    this.collapseFileTree();
+                }
             }, m * 60000);
         }
     }
@@ -878,6 +911,9 @@ class PrivacyTreePlugin extends Plugin {
             return;
         }
         const plugin = this;
+        if (this.blockEl) {
+            this.blockEl.style.pointerEvents = "none";
+        }
         const dlg = new Dialog({
             title: this.t("unlockTitle", "解锁"),
             width: "380px",
@@ -891,6 +927,14 @@ class PrivacyTreePlugin extends Plugin {
                 "</div></div>",
             destroyCallback: () => {
                 this.pwdDialog = null;
+                if (this.blockEl) {
+                    this.blockEl.style.pointerEvents = "";
+                }
+                if (this.focusPwd) {
+                    window.removeEventListener("focus", this.focusPwd);
+                    document.removeEventListener("visibilitychange", this.focusPwd);
+                    this.focusPwd = null;
+                }
                 this.resetIdle();
             },
         });
@@ -903,6 +947,11 @@ class PrivacyTreePlugin extends Plugin {
             } else {
                 input.value = "";
                 input.placeholder = plugin.t("wrongPassword", "密码错误");
+                try {
+                    input.focus();
+                } catch (e) {
+                    /* ignore */
+                }
             }
         };
         dlg.element.querySelector("#privacy-tree-pwd-btn").addEventListener("click", tryIt);
@@ -912,7 +961,18 @@ class PrivacyTreePlugin extends Plugin {
                 tryIt();
             }
         });
-        setTimeout(() => input.focus(), 60);
+        const doFocus = () => {
+            try {
+                input.focus();
+            } catch (e) {
+                /* ignore */
+            }
+        };
+        this.focusPwd = doFocus;
+        window.addEventListener("focus", doFocus);
+        document.addEventListener("visibilitychange", doFocus);
+        setTimeout(doFocus, 60);
+        setTimeout(doFocus, 400);
     }
 
     showBlockOverlay() {
@@ -928,6 +988,17 @@ class PrivacyTreePlugin extends Plugin {
         el.addEventListener("mousedown", (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (this.pwdDialog) {
+                const input = this.pwdDialog.element.querySelector("#privacy-tree-pwd");
+                if (input) {
+                    try {
+                        input.focus();
+                    } catch (err) {
+                        /* ignore */
+                    }
+                }
+                return;
+            }
             this.promptUnlock();
         });
         document.body.appendChild(el);
@@ -937,7 +1008,7 @@ class PrivacyTreePlugin extends Plugin {
             if (!this.blockEl) {
                 return;
             }
-            if (this.pwdDialog && this.pwdDialog.element && this.pwdDialog.element.contains(e.target)) {
+            if (this.pwdDialog) {
                 return;
             }
             e.stopPropagation();
@@ -994,10 +1065,10 @@ class PrivacyTreePlugin extends Plugin {
             this.idleTimer = null;
         }
         const minutes = Number(this.config.idleMinutes);
-        if (!this.active && minutes > 0 && !this.pwdDialog) {
+        if (!this.active && minutes > 0 && !this.pwdDialog && this.isCurrent()) {
             this.idleTimer = setTimeout(() => {
                 this.idleTimer = null;
-                if (!this.active) {
+                if (!this.active && this.isCurrent()) {
                     this.forceLock = !!this.config.idleLock;
                     this.activate(true);
                 }
