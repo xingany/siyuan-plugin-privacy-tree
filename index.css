@@ -1,0 +1,6 @@
+/* 文档树隐私保护插件 siyuan-plugin-privacy-tree */
+/* 遮罩通过 JS 直接替换文本实现，此处仅保留按钮激活态样式 */
+
+#privacy-tree-topbar.privacy-tree-active {
+    color: var(--b3-theme-primary) !important;
+}
