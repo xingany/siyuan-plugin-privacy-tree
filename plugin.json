@@ -2,7 +2,7 @@
   "name": "siyuan-plugin-privacy-tree",
   "author": "xingany",
   "url": "https://github.com/xingany/siyuan-plugin-privacy-tree",
-  "version": "0.1.0",
+  "version": "0.10.9",
   "minAppVersion": "3.0.0",
   "backends": [
     "all"
@@ -16,14 +16,15 @@
     "zh_CN": "文档树隐私保护"
   },
   "description": {
-    "default": "One-click privacy mode: hide names in the file tree, tabs, doc title and window title. Supports custom aliases per notebook/document, a shared placeholder, a top bar button and a keyboard shortcut.",
-    "zh_CN": "一键隐私模式：遮盖文档树、顶部页签、文档大标题与窗口标题中的名称。支持按笔记本/文档单独设置别名与开关，统一占位内容，顶栏按钮或快捷键切换。"
+    "default": "Privacy mode for SiYuan: hide names in the file tree, tabs, doc title, window title and headings (h1-h6); hide the current document's body block-by-block (tables cell-by-cell) or by selection, using a rounded bar / blank / custom text / random text; two shortcuts (editable / read-only); optional password-to-unlock; auto-enter after N idle minutes (optionally read-only); auto-collapse the file tree after N minutes.",
+    "zh_CN": "思源隐私模式：遮盖文档树/页签/文档标题/窗口标题/标题（h1-h6）；逐条遮盖当前文档正文（表格逐格）或按块选择，形式支持「圆角矩形条 / 空白 / 指定文字 / 随机文字」。两个快捷键（可编辑 / 不可编辑）、密码解锁、空闲自动进入（可选不可编辑）、N 分钟后自动收起文档树。"
   },
   "keywords": [
     "privacy",
     "doctree",
     "notebook",
     "alias",
+    "lock",
     "文档树",
     "隐私"
   ],

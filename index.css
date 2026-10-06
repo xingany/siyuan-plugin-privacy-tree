@@ -1,6 +1,150 @@
 /* 文档树隐私保护插件 siyuan-plugin-privacy-tree */
-/* 遮罩通过 JS 直接替换文本实现，此处仅保留按钮激活态样式 */
 
+/* 顶栏按钮激活态 */
 #privacy-tree-topbar.privacy-tree-active {
     color: var(--b3-theme-primary) !important;
+}
+
+/* ============ 内容/标题遮盖（覆盖层，不改动原文字） ============ */
+.privacy-tree-hidden {
+    position: relative !important;
+}
+.privacy-tree-hidden > * {
+    visibility: hidden !important;
+}
+/* 覆盖文字继承原元素的字号/粗细/对齐，从而与原文格式一致 */
+.privacy-tree-hidden::after {
+    content: attr(data-privacy-cover);
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: hidden;
+    background: transparent;
+    color: var(--b3-theme-on-background);
+    border-radius: 4px;
+    padding: inherit;
+    white-space: pre-wrap;
+    text-align: inherit;
+    pointer-events: none;
+}
+/* 圆角矩形条 */
+.privacy-tree-hidden[data-privacy-cover-style="bar"]::after {
+    background: var(--b3-theme-surface);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 8px;
+    margin: 3px 0;
+    padding: 0;
+    color: transparent;
+}
+/* 空白 */
+.privacy-tree-hidden[data-privacy-cover-style="blank"]::after {
+    background: transparent;
+    color: transparent;
+}
+
+/* ============ 设置界面 ============ */
+.privacy-tree-settings {
+    display: flex;
+    flex-direction: column;
+}
+.privacy-tree-group {
+    margin: 12px 0 4px;
+}
+.privacy-tree-group__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--b3-theme-on-background);
+}
+.privacy-tree-group__num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--b3-theme-primary);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+.privacy-tree-group__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0 0 9px;
+    padding-left: 12px;
+    border-left: 2px solid var(--b3-border-color);
+}
+.privacy-tree-card {
+    border: 1px solid var(--b3-border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: var(--b3-theme-background);
+}
+.privacy-tree-card__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--b3-theme-on-surface);
+    margin-bottom: 8px;
+}
+.privacy-tree-card__num {
+    color: var(--b3-theme-on-surface);
+    opacity: 0.5;
+    font-weight: 500;
+}
+.privacy-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+}
+.privacy-tree-hint {
+    font-size: 12px;
+    opacity: 0.62;
+    line-height: 1.5;
+    margin-top: 2px;
+}
+.privacy-tree-togglebtn {
+    min-width: 116px;
+}
+.privacy-tree-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 12px;
+    margin-top: 4px;
+    border-top: 1px solid var(--b3-border-color);
+}
+
+/* ============ 不可编辑时的透明拦截层（页面仍可见） ============ */
+.privacy-tree-block {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483600;
+    background: transparent;
+    cursor: not-allowed;
+}
+.privacy-tree-block__hint {
+    position: fixed;
+    right: 14px;
+    bottom: 14px;
+    z-index: 2147483601;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    background: var(--b3-theme-surface);
+    border: 1px solid var(--b3-border-color);
+    opacity: 0.8;
+    pointer-events: none;
 }
